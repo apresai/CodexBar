@@ -123,7 +123,11 @@ public enum KeychainAccessPreflight {
     }
     #endif
 
-    public static func checkGenericPassword(service: String, account: String?) -> Outcome {
+    public static func checkGenericPassword(
+        service: String,
+        account: String?,
+        useDataProtectionKeychain: Bool = true
+    ) -> Outcome {
         #if os(macOS)
         #if DEBUG
         if let override = self.taskCheckGenericPasswordOverrideStore {
@@ -144,6 +148,9 @@ public enum KeychainAccessPreflight {
             kSecReturnAttributes as String: true,
         ]
         KeychainNoUIQuery.apply(to: &query)
+        if useDataProtectionKeychain {
+            KeychainDataProtection.apply(to: &query)
+        }
         if let account {
             query[kSecAttrAccount as String] = account
         }

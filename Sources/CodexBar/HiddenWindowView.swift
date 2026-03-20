@@ -15,6 +15,7 @@ struct HiddenWindowView: View {
                 // Migrate keychain items to reduce permission prompts during development (runs off main thread)
                 await Task.detached(priority: .userInitiated) {
                     KeychainMigration.migrateIfNeeded()
+                    KeychainMigration.migrateToDataProtectionKeychainIfNeeded()
                 }.value
             }
             .onAppear {

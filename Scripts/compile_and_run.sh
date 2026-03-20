@@ -208,6 +208,11 @@ if [[ "${SIGNING_MODE:-adhoc}" == "adhoc" ]]; then
   while security delete-generic-password -s "com.steipete.CodexBar" 2>/dev/null; do
     :
   done
+  # Also clear cache service items (used by KeychainCacheStore)
+  security delete-generic-password -s "com.steipete.codexbar.cache" 2>/dev/null || true
+  while security delete-generic-password -s "com.steipete.codexbar.cache" 2>/dev/null; do
+    :
+  done
 fi
 
 # 3) Package (release build happens inside package_app.sh).

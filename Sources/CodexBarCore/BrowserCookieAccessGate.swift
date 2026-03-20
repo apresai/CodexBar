@@ -76,7 +76,9 @@ public enum BrowserCookieAccessGate {
 
     private static func chromiumKeychainRequiresInteraction() -> Bool {
         for label in self.safeStorageLabels {
-            switch KeychainAccessPreflight.checkGenericPassword(service: label.service, account: label.account) {
+            switch KeychainAccessPreflight.checkGenericPassword(
+                service: label.service, account: label.account, useDataProtectionKeychain: false)
+            {
             case .allowed:
                 return false
             case .interactionRequired:

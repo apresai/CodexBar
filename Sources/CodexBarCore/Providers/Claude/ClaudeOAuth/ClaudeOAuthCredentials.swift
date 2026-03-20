@@ -1863,7 +1863,9 @@ extension ClaudeOAuthCredentialsStore {
     private static func shouldShowClaudeKeychainPreAlert() -> Bool {
         let mode = ClaudeOAuthKeychainPromptPreference.current()
         guard self.shouldAllowClaudeCodeKeychainAccess(mode: mode) else { return false }
-        return switch KeychainAccessPreflight.checkGenericPassword(service: self.claudeKeychainService, account: nil) {
+        return switch KeychainAccessPreflight.checkGenericPassword(
+            service: self.claudeKeychainService, account: nil, useDataProtectionKeychain: false)
+        {
         case .interactionRequired:
             true
         case .failure:

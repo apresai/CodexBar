@@ -81,11 +81,26 @@ This is OS/keychain ACL behavior, not a `ThisDeviceOnly` migration issue.
 - Account key is `cookie.claude`.
 - Cache writes use `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
 
+### 4. V2 Migration: Legacy → Data Protection Keychain
+`Sources/CodexBar/KeychainMigration.swift` (`migrateToDataProtectionKeychainIfNeeded`)
+
+All CodexBar-owned keychain items now use the **data protection keychain** (`kSecUseDataProtectionKeychain = true`).
+The data protection keychain does not enforce per-app ACL checks — it uses `kSecAttrAccessible` for access control,
+which eliminates Keychain password prompts entirely for CodexBar-owned items.
+
+- Gate key: `KeychainMigrationV2Completed`
+- Runs once after V1 migration.
+- Reads items from legacy keychain (with `KeychainNoUIQuery` to avoid prompts), writes to data protection keychain,
+  then deletes legacy items.
+- Also migrates `com.steipete.codexbar.cache` items.
+- Skips items that return `errSecInteractionNotAllowed` (will be recreated on next use).
+- Best-effort: logs failures but does not block startup.
+
 ## What still uses `ThisDeviceOnly`
 
-- Legacy store implementations (`CookieHeaderStore`, token stores, MiniMax stores) still write using
-  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
-- Keychain cache store (`com.steipete.codexbar.cache`) also writes with `ThisDeviceOnly`.
+- All CodexBar-owned stores now write with both `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and
+  `kSecUseDataProtectionKeychain = true`.
+- Keychain cache store (`com.steipete.codexbar.cache`) also uses data protection keychain.
 
 ## Disable keychain access behavior
 
@@ -98,9 +113,10 @@ Effects:
 
 ## Verification
 
-### Check legacy migration flag
+### Check legacy migration flags
 ```bash
 defaults read com.steipete.codexbar KeychainMigrationV1Completed
+defaults read com.steipete.codexbar KeychainMigrationV2Completed
 ```
 
 ### Check Claude OAuth keychain cooldown
@@ -116,6 +132,7 @@ log show --predicate 'subsystem == "com.steipete.codexbar" && (category == "keyc
 ### Reset migration for local testing
 ```bash
 defaults delete com.steipete.codexbar KeychainMigrationV1Completed
+defaults delete com.steipete.codexbar KeychainMigrationV2Completed
 ./Scripts/compile_and_run.sh
 ```
 
@@ -127,5 +144,6 @@ defaults delete com.steipete.codexbar KeychainMigrationV1Completed
 - `Sources/CodexBarCore/Providers/Claude/ClaudeOAuth/ClaudeOAuthKeychainAccessGate.swift`
 - `Sources/CodexBarCore/KeychainAccessPreflight.swift`
 - `Sources/CodexBarCore/KeychainNoUIQuery.swift`
+- `Sources/CodexBarCore/KeychainDataProtection.swift`
 - `Sources/CodexBarCore/KeychainCacheStore.swift`
 - `Sources/CodexBarCore/CookieHeaderCache.swift`

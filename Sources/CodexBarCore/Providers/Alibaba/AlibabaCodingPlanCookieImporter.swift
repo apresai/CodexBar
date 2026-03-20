@@ -339,7 +339,9 @@ private enum AlibabaChromiumCookieFallbackImporter {
         var sawDenied = false
 
         for label in browser.safeStorageLabels {
-            switch KeychainAccessPreflight.checkGenericPassword(service: label.service, account: label.account) {
+            switch KeychainAccessPreflight.checkGenericPassword(
+                service: label.service, account: label.account, useDataProtectionKeychain: false)
+            {
             case .interactionRequired:
                 sawDenied = true
                 continue
