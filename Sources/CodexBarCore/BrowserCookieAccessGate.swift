@@ -12,7 +12,8 @@ public enum BrowserCookieAccessGate {
 
     private static let lock = OSAllocatedUnfairLock<State>(initialState: State())
     private static let defaultsKey = "browserCookieAccessDeniedUntil"
-    private static let cooldownInterval: TimeInterval = 60 * 60 * 6
+    // Permanent suppression after denial — only reset by user-initiated actions.
+    private static let cooldownInterval: TimeInterval = .infinity
     private static let log = CodexBarLog.logger(LogCategories.browserCookieGate)
 
     public static func shouldAttempt(_ browser: Browser, now: Date = Date()) -> Bool {

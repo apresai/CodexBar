@@ -280,6 +280,7 @@ enum KeychainMigration {
         }
 
         // Delete legacy item (intentionally no data protection flag — targets the legacy keychain)
+        self.log.debug("V2 migration: deleting legacy item \(logLabel)")
         var deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -289,8 +290,27 @@ enum KeychainMigration {
         }
 
         let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
-        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+        if deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound {
+            self.log.debug("V2 migration: legacy item deleted for \(logLabel)")
+        } else {
             self.log.warning("V2 migration: failed to delete legacy item \(logLabel): \(deleteStatus)")
+        }
+
+        // On macOS Tahoe, SecItemDelete without kSecUseDataProtectionKeychain may match items in
+        // both keychains. Verify the data protection item survived; re-add if accidentally deleted.
+        if case .notFound = KeychainAccessPreflight.checkGenericPassword(
+            service: service, account: account)
+        {
+            self.log.warning(
+                "V2 migration: data protection item was deleted by legacy cleanup; re-adding \(logLabel)")
+            let reAddStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if reAddStatus != errSecSuccess {
+                self.log.error(
+                    "V2 migration: re-add after accidental delete failed for \(logLabel): \(reAddStatus)")
+                return .failed
+            }
+            self.log.info("V2 migrated \(logLabel) to data protection keychain (re-added after delete)")
+            return .migrated
         }
 
         if addStatus == errSecDuplicateItem {

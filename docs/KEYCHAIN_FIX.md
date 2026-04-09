@@ -126,7 +126,7 @@ defaults read com.steipete.codexbar claudeOAuthKeychainDeniedUntil
 
 ### Inspect keychain-related logs
 ```bash
-log show --predicate 'subsystem == "com.steipete.codexbar" && (category == "keychain-migration" || category == "keychain-preflight" || category == "keychain-prompt" || category == "keychain-cache" || category == "claude-usage" || category == "cookie-cache")' --last 10m
+log show --predicate 'subsystem == "com.steipete.codexbar" && (category == "keychain-migration" || category == "keychain-preflight" || category == "keychain-prompt" || category == "keychain-cache" || category == "claude-usage" || category == "cookie-cache" || category == "alibaba-cookie" || category == "browser-cookie-gate")' --last 10m
 ```
 
 ### Reset migration for local testing
@@ -136,12 +136,34 @@ defaults delete com.steipete.codexbar KeychainMigrationV2Completed
 ./Scripts/compile_and_run.sh
 ```
 
+## When adding new keychain access paths
+
+When writing code that calls `SecItemCopyMatching`, `SecItemAdd`, `SecItemUpdate`, or `SecItemDelete`:
+
+1. **Data reads (`kSecReturnData: true`)**: MUST apply `KeychainNoUIQuery` unless the call is explicitly
+   user-initiated (e.g., user clicked "Allow" in a prompt dialog). Attribute-only reads (`kSecReturnAttributes`)
+   are less likely to prompt but should still use `KeychainNoUIQuery` when possible.
+
+2. **Cross-app keychain reads** (browser Safe Storage, Claude CLI credentials): Cannot use
+   `kSecUseDataProtectionKeychain`. These MUST use `KeychainNoUIQuery` and should record denials
+   to the appropriate access gate (`BrowserCookieAccessGate` or `ClaudeOAuthKeychainAccessGate`).
+
+3. **CodexBar-owned items**: MUST use `KeychainDataProtection.apply()` for all reads and writes.
+   This routes through the data protection keychain which does not trigger ACL prompts.
+
+4. **Logging**: All keychain calls MUST log the operation, service/account, and result status.
+   Use a dedicated log category.
+
+5. **Deletion**: When deleting legacy keychain items alongside data protection items, verify the data
+   protection item survives the delete (see V2 migration verify-after-delete pattern).
+
 ## Key files (current)
 
 - `Sources/CodexBar/KeychainMigration.swift`
 - `Sources/CodexBar/HiddenWindowView.swift`
 - `Sources/CodexBarCore/Providers/Claude/ClaudeOAuth/ClaudeOAuthCredentials.swift`
 - `Sources/CodexBarCore/Providers/Claude/ClaudeOAuth/ClaudeOAuthKeychainAccessGate.swift`
+- `Sources/CodexBarCore/Providers/Alibaba/AlibabaCodingPlanCookieImporter.swift`
 - `Sources/CodexBarCore/KeychainAccessPreflight.swift`
 - `Sources/CodexBarCore/KeychainNoUIQuery.swift`
 - `Sources/CodexBarCore/KeychainDataProtection.swift`

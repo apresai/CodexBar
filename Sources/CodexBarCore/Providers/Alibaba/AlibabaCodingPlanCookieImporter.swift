@@ -158,6 +158,7 @@ public enum AlibabaCodingPlanCookieImporter {
         logger: ((String) -> Void)? = nil) throws -> SessionInfo?
     {
         guard browser.usesChromiumProfileStore else { return nil }
+        logger?("[alibaba-cookie] Chromium fallback: attempting Safe Storage read for \(browser.displayName)")
         return try AlibabaChromiumCookieFallbackImporter.importSession(
             browser: browser,
             domains: self.cookieDomains,
@@ -187,6 +188,8 @@ public enum AlibabaCodingPlanCookieImporter {
 }
 
 private enum AlibabaChromiumCookieFallbackImporter {
+    private static let log = CodexBarLog.logger(LogCategories.alibabaCookie)
+
     private struct ChromiumCookieRecord {
         let domain: String
         let name: String
@@ -349,8 +352,14 @@ private enum AlibabaChromiumCookieFallbackImporter {
                 break
             }
 
-            if let password = self.safeStoragePassword(service: label.service, account: label.account) {
-                keys.append(self.deriveKey(from: password))
+            switch self.safeStoragePassword(service: label.service, account: label.account) {
+            case .password(let pw):
+                keys.append(self.deriveKey(from: pw))
+            case .denied:
+                sawDenied = true
+                BrowserCookieAccessGate.recordDenied(for: browser)
+            case .notFound, .failed:
+                break
             }
         }
 
@@ -363,19 +372,48 @@ private enum AlibabaChromiumCookieFallbackImporter {
         throw ImportError.keyUnavailable(browser: browser)
     }
 
-    private static func safeStoragePassword(service: String, account: String) -> String? {
-        let query: [String: Any] = [
+    private enum SafeStorageResult {
+        case password(String)
+        case notFound
+        case denied
+        case failed(OSStatus)
+    }
+
+    private static func safeStoragePassword(service: String, account: String) -> SafeStorageResult {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecReturnData as String: true,
         ]
+        KeychainNoUIQuery.apply(to: &query)
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data, let pw = String(data: data, encoding: .utf8) else {
+                self.log.warning(
+                    "Safe Storage data was not valid UTF-8",
+                    metadata: ["service": service])
+                return .failed(status)
+            }
+            self.log.debug("Safe Storage password read succeeded", metadata: ["service": service])
+            return .password(pw)
+        case errSecItemNotFound:
+            return .notFound
+        case errSecInteractionNotAllowed:
+            self.log.info(
+                "Safe Storage read requires interaction; suppressing",
+                metadata: ["service": service])
+            return .denied
+        default:
+            self.log.warning(
+                "Safe Storage read failed",
+                metadata: ["service": service, "status": "\(status)"])
+            return .failed(status)
+        }
     }
 
     private static func deriveKey(from password: String) -> Data {

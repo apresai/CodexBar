@@ -11,7 +11,8 @@ public enum ClaudeOAuthKeychainAccessGate {
 
     private static let lock = OSAllocatedUnfairLock<State>(initialState: State())
     private static let defaultsKey = "claudeOAuthKeychainDeniedUntil"
-    private static let cooldownInterval: TimeInterval = 60 * 60 * 6
+    // Permanent suppression after denial — only reset by user-initiated actions (clearDenied).
+    private static let cooldownInterval: TimeInterval = .infinity
     @TaskLocal private static var taskOverrideShouldAllowPromptForTesting: Bool?
     #if DEBUG
     public final class DeniedUntilStore: @unchecked Sendable {
